@@ -2,22 +2,38 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const kafkajs_1 = require("kafkajs");
 const cloudevents_1 = require("cloudevents");
-const input_prompter_1 = require("./utils/input-prompter");
+const commander_1 = require("commander");
+// Define the expected command line arguments
+const program = new commander_1.Command();
+program
+    .requiredOption("-t, --topic <topic>", "The name of the topic to subscribe to.")
+    .requiredOption("-u, --username <username>", "The username to use for authentication with Kafka.")
+    .requiredOption("-p, --password <password>", "The password to use for authentication with Kafka.")
+    .requiredOption("-b, --brokers <brokers>", "The Kafka brokers to connect to should be specified as a comma-separated list of <host>:<port> pairs. For example: kafka1:9092,kafka2:9092.")
+    .requiredOption("-m, --message <message>", "The CloudEvents message payload to send to Kafka.")
+    .option("-v, --version <version>", "The CloudEvents specification version to use.", "1.0")
+    .option("--datacontenttype <datacontenttype>", "The content type of the CloudEvents message data to send to Kafka.", "application/cloudevents+json; charset=UTF-8")
+    .option("--source <source>", "The CloudEvents source attribute, representing the context of the event.", "/mycontext/subcontext")
+    .option("--dataschema <dataschema>", "The CloudEvents data schema URL for validating the message data.", "http://my-schema")
+    .option("--type <type>", "The CloudEvents type attribute, describing the type of event.", "com.example.myevent");
+program.parse(process.argv);
+const options = program.opts();
+const { username, password, topic, brokers, message, version, datacontenttype, source, dataschema, type, } = options;
 // Define the CloudEvent
 const event = new cloudevents_1.CloudEvent({
-    specversion: "1.0",
-    type: "com.example.someevent",
-    source: "/mycontext/subcontext",
+    specversion: version,
+    type,
+    source,
     id: "1234-1234-1234",
     time: new Date().toISOString(),
-    dataschema: "http://my-schema",
-    datacontenttype: "application/cloudevents+json; charset=UTF-8",
+    dataschema,
+    datacontenttype,
     data: {
-        message: "Hello, world!",
+        message,
     },
 });
 // Convert the CloudEvent to a Kafka message
-const message = {
+const formattedMessage = {
     key: event.id,
     value: JSON.stringify(event),
     headers: {
@@ -27,31 +43,24 @@ const message = {
 // Send the message to Kafka
 async function sendMessage() {
     try {
-        // Prompt for Kafka connection details
-        const inputPrompter = new input_prompter_1.InputPrompter();
-        const kafkaTopic = await inputPrompter.prompt("Enter the Kafka topic: ");
-        const kafkaUsername = await inputPrompter.prompt("Enter the Kafka producer username: ");
-        const kafkaPassword = await inputPrompter.prompt("Enter the Kafka producer password: ");
-        const kafkaBrokers = await inputPrompter.prompt("Enter the Kafka brokers (comma separated): ");
-        inputPrompter.close();
         // Initialize Kafka client
         const kafka = new kafkajs_1.Kafka({
             logLevel: kafkajs_1.logLevel.INFO,
-            brokers: kafkaBrokers.split(","),
+            brokers: brokers.split(","),
             clientId: "producer-sample-javascript",
             ssl: true,
             sasl: {
                 mechanism: "scram-sha-512",
-                username: kafkaUsername,
-                password: kafkaPassword,
+                username,
+                password,
             },
         });
         // Create a Kafka producer instance
         const producer = kafka.producer();
         await producer.connect();
         const response = await producer.send({
-            topic: kafkaTopic,
-            messages: [message],
+            topic,
+            messages: [formattedMessage],
         });
         await producer.disconnect();
         console.log(`Sent message: ${JSON.stringify(response[0])}`);

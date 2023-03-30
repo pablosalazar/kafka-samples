@@ -2,34 +2,38 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const kafkajs_1 = require("kafkajs");
 const cloudevents_1 = require("cloudevents");
-const input_prompter_1 = require("./utils/input-prompter");
+const commander_1 = require("commander");
+// Define the expected command line arguments
+const program = new commander_1.Command();
+program
+    .requiredOption("-t, --topic <topic>", "The name of the topic to subscribe to.")
+    .requiredOption("-u, --username <username>", "The username to use for authentication with Kafka.")
+    .requiredOption("-p, --password <password>", "The password to use for authentication with Kafka.")
+    .requiredOption("-b, --brokers <brokers>", "The Kafka brokers to connect to should be specified as a comma-separated list of <host>:<port> pairs. For example: kafka1:9092,kafka2:9092.");
+program.parse(process.argv);
+const options = program.opts();
+const { username, password, topic, brokers } = options;
+program.parse();
 async function runConsumer() {
     try {
-        // Prompt for Kafka connection details
-        const inputPrompter = new input_prompter_1.InputPrompter();
-        const kafkaTopic = await inputPrompter.prompt("Enter the Kafka topic: ");
-        const kafkaUsername = await inputPrompter.prompt("Enter the Kafka consumer username: ");
-        const kafkaPassword = await inputPrompter.prompt("Enter the Kafka consumer password: ");
-        const kafkaBrokers = await inputPrompter.prompt("Enter the Kafka brokers (comma separated): ");
-        inputPrompter.close();
         // Define the Kafka broker and topic
         const kafka = new kafkajs_1.Kafka({
             logLevel: kafkajs_1.logLevel.INFO,
-            brokers: kafkaBrokers.split(","),
+            brokers: brokers.split(","),
             clientId: "consumer-sample-javascript",
             ssl: true,
             sasl: {
                 mechanism: "scram-sha-512",
-                username: kafkaUsername,
-                password: kafkaPassword,
+                username,
+                password,
             },
         });
         // Create a Kafka consumer instance
         const consumer = kafka.consumer({ groupId: "test-group" });
         // Subscribe to topic
         await consumer.connect();
-        await consumer.subscribe({ topic: kafkaTopic, fromBeginning: true });
-        console.log(`\nListening to topic: "${kafkaTopic}"...\n`);
+        await consumer.subscribe({ topic: topic, fromBeginning: true });
+        console.log(`\nListening to topic: "${topic}"...\n`);
         // Listen incoming Kafka messages
         await consumer.run({
             eachMessage: async ({ topic, partition, message, }) => {
@@ -45,7 +49,8 @@ async function runConsumer() {
                 });
                 console.log("\n------------------- value --------------------\n");
                 console.log(JSON.stringify(event, null, 2));
-                console.log("----------------------------------------------\n");
+                console.log("------------------- End -----------------------\n");
+                console.log(`Listening to topic: "${topic}"...\n`);
             },
         });
     }

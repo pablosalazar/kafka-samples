@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "cloudevents": "^6.0.4",
+    "commander": "^10.0.0",
     "kafkajs": "^2.2.4"
   }
 }
